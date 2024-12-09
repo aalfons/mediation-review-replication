@@ -16,6 +16,13 @@ deviations from normality assumptions in the observed variable space, which
 is a setting not commonly considered in the literature on robust mediation
 analysis, and we obtain preleminary results via a simulation study.
 
+More information can be found in our paper:
+
+A. Alfons and D.R. Schley (2024).
+Robust mediation analysis: What we talk about when we talk about robustness. 
+PsyArXiv. doi: [10.31234/osf.io/2hqdy](https://doi.org/10.31234/osf.io/2hqdy).
+
+
 ## Reproduce results
 This repository provides a collection of [R](https://CRAN.R-project.org/) 
 scripts to reproduce the simulations and figures in our article.
