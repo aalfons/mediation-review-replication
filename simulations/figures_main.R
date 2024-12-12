@@ -202,22 +202,23 @@ for (i in 1:nrow(settings)) {
           strip.text = element_text(size = 12))
 
   # save plot to file
+  suffix <- paste(settings[i, "exposure"],
+                   if (settings[i, "b"] == 0) "nonmediation" else "mediation",
+                   sep = "_")
   if (settings[i, "b"] == 0) {
-    file_plot <- "simulations/figures/figure_x=%s_a=%.1f_b=%d.pdf"
-    # file_plot_bw <- "simulations/figures/figure_bw_x=%s_a=%.1f_b=%d.pdf"
+    file_plot <- "simulations/figures/figure_%s.pdf"
+    # file_plot_bw <- "simulations/figures/figure_bw_%s.pdf"
   } else {
-    file_plot <- "simulations/figures/figure_x=%s_a=%.1f_b=%.1f.pdf"
-    # file_plot_bw <- "simulations/figures/figure_bw_x=%s_a=%.1f_b=%.1f.pdf"
+    file_plot <- "simulations/figures/figure_%s.pdf"
+    # file_plot_bw <- "simulations/figures/figure_bw_%s.pdf"
   }
   # in color
-  pdf(file = sprintf(file_plot, settings[i, "exposure"],
-                     settings[i, "a"], settings[i, "b"]),
+  pdf(file = sprintf(file_plot, suffix),
       width = 8.5, height = 4.25)
   print(p + scale_fill_manual(values = colors))
   dev.off()
   # # in grayscale
-  # pdf(file = sprintf(file_plot_bw, settings[i, "exposure"],
-  #                    settings[i, "a"], settings[i, "b"]),
+  # pdf(file = sprintf(file_plot_bw, suffix),
   #     width = 8.5, height = 4.25)
   # print(p + scale_fill_manual(values = col2gray(colors)))
   # dev.off()
