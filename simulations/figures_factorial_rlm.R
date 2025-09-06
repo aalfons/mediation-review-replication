@@ -11,9 +11,9 @@ library("purrr")
 library("MASS")
 
 
-#Important, clear the workspace before running the loops below otherwise rows will stack duplicates.
+# Important, clear the workspace before running the loops below otherwise rows will stack duplicates.
 
-#Load data
+# Load data
 load("simulations/results/results_within_subject.RData")
 
 results <- results %>%
@@ -216,10 +216,12 @@ plot_results <- plot_results %>%
   mutate(
     term_relabel = map_chr(term, relabel_term),
     b = case_when(
-      b == 0 ~ "No Indirect Effect",
-      b == 0.4 ~ "True Indirect Effect",
+      b == 0 ~ "Without mediation",
+      b == 0.4 ~ "With mediation",
       TRUE ~ as.character(b)
-    ))
+    ),
+    b = factor(b, levels = c("Without mediation", "With mediation"))
+  )
 
 # Convert to factor with custom order
 custom_order <- c("Treatment Variable", "Noise", "Skewness", "Heavy tails", "Rounding", "Outliers", "Censoring")
@@ -231,10 +233,11 @@ plot_results <- plot_results %>%
 # Reorder Method with custom labels
 method_order <- c("ols_boot", "ols_causal", "median_boot", "median_causal",
                   "winsorized_boot", "ROBMED")
-method_labels <- c("Reg-OLS", "CMA-OLS", "Reg-Median", "CMA-Median",
+method_labels <- c("Reg-OLS", "PO-OLS", "Reg-Median", "PO-Median",
                    "Winsorized", "ROBMED")
-plot_results$Method <- factor(plot_results$Method, levels = method_order, labels = method_labels)
-
+plot_results <- plot_results %>%
+  filter(Method %in% method_order) %>%
+  mutate(Method = factor(Method, levels = method_order, labels = method_labels))
 
 
 # Group by interaction_level to calculate boundaries and label positions
@@ -259,7 +262,8 @@ interaction_plot <-
   scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black"),
                      guide = "none") + # Map TRUE to red, FALSE to black
   facet_grid(b ~ Method) +                   # Facet by relabeled "b" and Method
-  labs(x = NULL, y = "Bias in Estimated Indirect Effect") +  # Relabel y-axis
+  labs(x = NULL,
+       y = expression("Bias in estimated indirect effect"~italic(ab))) +  # Relabel y-axis
   scale_y_continuous(
     breaks = seq(-0.15, 0.15, by = 0.05), # Major ticks at intervals of 0.05
     minor_breaks = seq(-0.15, 0.15, by = 0.01), # Minor ticks at intervals of 0.01

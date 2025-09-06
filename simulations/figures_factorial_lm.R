@@ -10,9 +10,9 @@ library("stringr")
 library("purrr")
 
 
-#Important, clear the workspace before running the loops below otherwise rows will stack duplicates.
+# Important, clear the workspace before running the loops below otherwise rows will stack duplicates.
 
-#Load data
+# Load data
 load("simulations/results/results_within_subject.RData")
 
 # Assuming 'results' is your dataframe and necessary packages are loaded
@@ -69,7 +69,7 @@ for (k in seq_len(nrow(method_b_combinations))) {
     next
   }
 
-#This code was here to deal with the fact that the 'exposure' variable had no variability for the Imai simulations. Because we are not modeling the exposure variable, this code is not necessary.
+  # This code was here to deal with the fact that the 'exposure' variable had no variability for the Imai simulations. Because we are not modeling the exposure variable, this code is not necessary.
   usable_moderators <- other_moderators[sapply(data_sub[other_moderators], function(x) nlevels(x) >=2)]
 
   if (length(usable_moderators) == 0) {
@@ -201,17 +201,21 @@ plot_results <- plot_results %>%
     term_relabel = factor(term_relabel, levels = unique(term_relabel))
   )
 
+
+## plot only methods without power transformations
+
 # Reorder Method with custom labels
 method_order <- c("ols_boot", "ols_causal", "median_boot", "median_causal",
                   "winsorized_boot", "ROBMED")
-method_labels <- c("Reg-OLS", "CMA-OLS", "Reg-Median", "CMA-Median",
+method_labels <- c("Reg-OLS", "PO-OLS", "Reg-Median", "PO-Median",
                    "Winsorized", "ROBMED")
-plot_results$Method <- factor(plot_results$Method, levels = method_order, labels = method_labels)
-
+plot_results_main <- plot_results %>%
+  filter(Method %in% method_order) %>%
+  mutate(Method = factor(Method, levels = method_order, labels = method_labels))
 
 
 # Group by interaction_level to calculate boundaries and label positions
-interaction_levels <- plot_results %>%
+interaction_levels <- plot_results_main %>%
   group_by(interaction_level) %>%
   summarize(
     x_start = min(as.numeric(term_relabel)),
@@ -221,7 +225,7 @@ interaction_levels <- plot_results %>%
 
 # Create the plot with updated labels and aesthetics
 interaction_plot <-
-  ggplot(plot_results,
+  ggplot(plot_results_main,
          aes(x = term_relabel, y = estimate, ymin = conf.low,
              ymax = conf.high)) +
   geom_vline(xintercept = interaction_levels$x_end + 0.5,
@@ -230,7 +234,8 @@ interaction_plot <-
   scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black"),
                      guide = "none") + # Map TRUE to red, FALSE to black
   facet_grid(b ~ Method) +                   # Facet by relabeled "b" and Method
-  labs(x = NULL, y = "Bias in Estimated Indirect Effect") +  # Relabel y-axis
+  labs(x = NULL,
+       y = expression("Bias in estimated indirect effect"~italic(ab))) +  # Relabel y-axis
   theme_bw() +                          # Use a minimal theme
   theme(
     axis.title = element_text(size = 12),   # Customize y-axis title size
@@ -242,10 +247,8 @@ interaction_plot <-
     strip.text = element_text(size = 12)    # Customize facet labels
   )
 
-
 # Print the plot
 print(interaction_plot)
-
 
 # save plot to file
 file_plot <- "simulations/figures/figure_factorial_lm.pdf"
@@ -253,4 +256,59 @@ file_plot <- "simulations/figures/figure_factorial_lm.pdf"
 # in color
 pdf(file = file_plot, width = 8.5, height = 4)
 print(interaction_plot)
+dev.off()
+
+
+## plot OLS bootstrap and ROBMED without and with transformations
+
+# Reorder Method with custom labels
+method_order <- c("ols_boot", "yj_boot", "ROBMED", "ryj_boot")
+method_labels <- c("Reg-OLS", "YJ-Reg-OLS", "ROBMED", "rYJ-ROBMED")
+plot_results_transformations <- plot_results %>%
+  filter(Method %in% method_order) %>%
+  mutate(Method = factor(Method, levels = method_order, labels = method_labels))
+
+
+# Group by interaction_level to calculate boundaries and label positions
+interaction_levels <- plot_results_transformations %>%
+  group_by(interaction_level) %>%
+  summarize(
+    x_start = min(as.numeric(term_relabel)),
+    x_end = max(as.numeric(term_relabel)),
+    x_position = mean(as.numeric(term_relabel))
+  )
+
+# Create the plot with updated labels and aesthetics
+interaction_plot_transformations <-
+  ggplot(plot_results_transformations,
+         aes(x = term_relabel, y = estimate, ymin = conf.low,
+             ymax = conf.high)) +
+  geom_vline(xintercept = interaction_levels$x_end + 0.5,
+             linetype = "dashed", color = "gray")+
+  geom_point(aes(color = grepl("outlier_probability0.02", term)), size = 1) + # any term with outlier_probability0.02 is colored red
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black"),
+                     guide = "none") + # Map TRUE to red, FALSE to black
+  facet_grid(b ~ Method) +                   # Facet by relabeled "b" and Method
+  labs(x = NULL,
+       y = expression("Bias in estimated indirect effect"~italic(ab))) +  # Relabel y-axis
+  theme_bw() +                          # Use a minimal theme
+  theme(
+    axis.title = element_text(size = 12),   # Customize y-axis title size
+    axis.text.x = element_blank(),          # Remove x-axis labels
+    axis.text.y = element_text(size = 11),  # Customize y-axis text size
+    axis.ticks.x = element_blank(),         # Remove tick labels
+    panel.grid.major.x = element_blank(),   # Remove major gridlines on x-axis
+    panel.grid.minor = element_blank(),     # Remove minor gridlines
+    strip.text = element_text(size = 12)    # Customize facet labels
+  )
+
+# Print the plot
+print(interaction_plot_transformations)
+
+# save plot to file
+file_plot <- "simulations/figures/figure_factorial_lm_transformations.pdf"
+
+# in color
+pdf(file = file_plot, width = 8.5, height = 4)
+print(interaction_plot_transformations)
 dev.off()

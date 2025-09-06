@@ -35,9 +35,9 @@ methods <- c("ols_boot", "ols_causal", "median_boot", "median_causal",
 
 ## nice labels to be used for plots
 method_labels <- c(ols_boot = "Reg-OLS",
-                   ols_causal = "CMA-OLS",
+                   ols_causal = "PO-OLS",
                    median_boot = "Reg-Median",
-                   median_causal = "CMA-Median",
+                   median_causal = "PO-Median",
                    winsorized_boot = "Winsorized",
                    ROBMED = "ROBMED")
 setting_labels <- c(latent = "\"Latent\"", noise = "\"Noise\"",
@@ -173,13 +173,8 @@ for (i in 1:nrow(settings)) {
                         Method = unname(method_labels[1]), Value = 0:1)
 
   # colors and plot symbols
-  if (settings[i, "exposure"] == "binary") {
-    colors <- c("#F8766D", "#F8766D", "#619CFF", "#619CFF", "#F564E3", "#00BFC4")
-    symbols <- c(21, 22, 21, 22, 21, 21)
-  } else {
-    colors <- c("#F8766D", "#619CFF", "#F564E3", "#00BFC4")
-    symbols <- rep(21, 4)
-  }
+  colors <- c("#F8766D", "#F8766D", "#619CFF", "#619CFF", "#F564E3", "#00BFC4")
+  symbols <- c(21, 22, 21, 22, 21, 21)
 
   # plot results
   p <- ggplot() +
@@ -193,13 +188,16 @@ for (i in 1:nrow(settings)) {
                              shape = Method),
                data = df_reject, size = 3, show.legend = FALSE) +
     facet_grid(Parameter ~ Setting, scales = "free_y",
-               labeller = "label_parsed") +
+               labeller = "label_parsed", switch = "y") +
     scale_shape_manual(values = symbols) +
     labs(x = NULL, y = NULL) + theme_bw() +
     theme(axis.text.x = element_text(size = 11, angle = 90,
                                      hjust = 1, vjust = 0.5),
           axis.text.y = element_text(size = 11),
-          strip.text = element_text(size = 12))
+          strip.background.y = element_blank(),
+          strip.placement = "outside",
+          strip.text = element_text(size = 12),
+          strip.switch.pad.grid = unit(0, "pt"))
 
   # save plot to file
   suffix <- paste(settings[i, "exposure"],

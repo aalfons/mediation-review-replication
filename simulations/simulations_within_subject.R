@@ -5,10 +5,11 @@
 
 
 # load packages
-library("robmed")      # regression-based mediation analysis
-library("mediation")   # causal mediation analysis
-library("quantreg")    # for median regression
-library("parallel")    # for parallel computing
+library("robmed")     # regression-based mediation analysis
+library("cellWise")   # for (robust) Yeo-Johnson transformation
+library("mediation")  # causal mediation analysis
+library("quantreg")   # for median regression
+library("parallel")   # for parallel computing
 
 # load script with additional utility functions for simulation
 source("simulations/utils.R")
@@ -22,8 +23,6 @@ K <- 1000         # number of replications
 ## control parameters for data generation
 # parameters to loop over
 settings <- expand.grid(
-  # whether X should be binary or continuous
-  exposure = c("binary", "continuous"),
   # effect of M on Y
   b = c(0, 0.4),
   # noise-to-signal ratio when adding random measurement error
@@ -37,6 +36,9 @@ settings <- expand.grid(
   # probability mass in left tail to be censored (for a normal distribution,
   # we censor at one standard deviation from the mean)
   censoring_fraction = c(0, pnorm(-1)),
+  # whether X should be binary or continuous
+  exposure = c("binary", "continuous"),
+  # other arguments
   stringsAsFactors = FALSE
 )
 # parameters to remain fixed
@@ -53,7 +55,7 @@ outlier_multiplier <- 0.1     # scaling factor of outliers before shift
 
 ## control parameters for parallel computing
 # number of CPU cores to be used
-nb_cores <- if (.Platform$OS.type == "windows") 1 else 12
+nb_cores <- if (.Platform$OS.type == "windows") 1 else 8
 # list for splitting settings
 # (each list element gives settings to parallelize over)
 nb_settings <- nrow(settings)
@@ -302,69 +304,143 @@ results_list <- lapply(seq_len(K), function(k) {
               reject_joint_t, reject_joint_z)
       }, error = function(condition) NULL)
 
-      # for binary exposure variable, apply causal mediation analysis
-      # (implementation is rather slow; also note that unlike for the methods
-      # above, we cannot supply the same bootstrap samples as an argument)
-      if (exposure == "binary") {
+      # Note: Implementation of causal mediation analysis is rather slow.
+      #       Unlike for the methods above, we cannot supply the same bootstrap
+      #       samples as an argument. For continuous treatment variables, the
+      #       default values to condition on for calculating the treatment
+      #       effect are still 0 and 1. This choice should not matter for
+      #       linear models as long as it's a unit step.
 
-        # causal mediation analysis based on OLS regressions
-        df_ols_causal <- tryCatch({
-          # perform causal mediation analysis
-          suppressMessages({
-            # apply OLS regressions
-            fit_m <- lm(m ~ x, data = measured_data)
-            fit_y <- lm(y ~ m + x, data = measured_data)
+      # causal mediation analysis based on OLS regressions
+      df_ols_causal <- tryCatch({
+        # perform causal mediation analysis
+        suppressMessages({
+          # apply OLS regressions
+          fit_m <- lm(m ~ x, data = measured_data)
+          fit_y <- lm(y ~ m + x, data = measured_data)
+          # apply causal bootstrap test
+          test <- mediate(fit_m, fit_y, sims = 1000, boot = TRUE,
+                          boot.ci.type = "perc", treat = "x",
+                          mediator = "m", conf.level = level)
+        })
+        # point estimates of the average conditional mediation effect
+        acme_boot <- mean(test$d.avg.sims, na.rm = TRUE)
+        acme_data <- test$d.avg
+        # bootstrap test for the average conditional mediation effect
+        reject_index <- prod(test$d.avg.ci) > 0
+        # add to data frame
+        cbind(info, Method = "ols_causal", estimate_boot = acme_boot,
+              estimate_data = acme_data, reject_index,
+              reject_joint_t = NA, reject_joint_z = NA)
+      }, error = function(condition) NULL)
+
+      # causal mediation analysis based on median regressions
+      df_median_causal <- tryCatch({
+        # perform causal mediation analysis
+        suppressMessages({
+          suppressWarnings({
+            # apply median regressions
+            fit_m <- rq(m ~ x, tau = 0.5, data = measured_data,
+                        method = median_control$method)
+            fit_y <- rq(y ~ m + x, tau = 0.5, data = measured_data,
+                        method = median_control$method)
             # apply causal bootstrap test
             test <- mediate(fit_m, fit_y, sims = 1000, boot = TRUE,
                             boot.ci.type = "perc", treat = "x",
                             mediator = "m", conf.level = level)
           })
-          # point estimates of the average conditional mediation effect
-          acme_boot <- mean(test$d.avg.sims, na.rm = TRUE)
-          acme_data <- test$d.avg
-          # bootstrap test for the average conditional mediation effect
-          reject_index <- prod(test$d.avg.ci) > 0
-          # add to data frame
-          cbind(info, Method = "ols_causal", estimate_boot = acme_boot,
-                estimate_data = acme_data, reject_index,
-                reject_joint_t = NA, reject_joint_z = NA)
-        }, error = function(condition) NULL)
+        })
+        # point estimates of the average conditional mediation effect
+        acme_boot <- mean(test$d.avg.sims, na.rm = TRUE)
+        acme_data <- test$d.avg
+        # bootstrap test for the average conditional mediation effect
+        reject_index <- prod(test$d.avg.ci) > 0
+        # add to data frame
+        cbind(info, Method = "median_causal", estimate_boot = acme_boot,
+              estimate_data = acme_data, reject_index,
+              reject_joint_t = NA, reject_joint_z = NA)
+      }, error = function(condition) NULL)
 
-        # causal mediation analysis based on median regressions
-        df_median_causal <- tryCatch({
-          # perform causal mediation analysis
-          suppressMessages({
-            suppressWarnings({
-              # apply median regressions
-              fit_m <- rq(m ~ x, tau = 0.5, data = measured_data,
-                          method = median_control$method)
-              fit_y <- rq(y ~ m + x, tau = 0.5, data = measured_data,
-                          method = median_control$method)
-              # apply causal bootstrap test
-              test <- mediate(fit_m, fit_y, sims = 1000, boot = TRUE,
-                              boot.ci.type = "perc", treat = "x",
-                              mediator = "m", conf.level = level)
-            })
-          })
-          # point estimates of the average conditional mediation effect
-          acme_boot <- mean(test$d.avg.sims, na.rm = TRUE)
-          acme_data <- test$d.avg
-          # bootstrap test for the average conditional mediation effect
-          reject_index <- prod(test$d.avg.ci) > 0
-          # add to data frame
-          cbind(info, Method = "median_causal", estimate_boot = acme_boot,
-                estimate_data = acme_data, reject_index,
-                reject_joint_t = NA, reject_joint_z = NA)
-        }, error = function(condition) NULL)
+      # apply power transformations
+      if (exposure == "binary") {
+
+        # Yeo-Johnson transformation of mediator and outcome variable
+        transformation_yj <- transfo(measured_data[, c("m", "y")], type = "YJ",
+                                     robust = FALSE, standardize = FALSE,
+                                     checkPars = list(coreOnly = TRUE))
+        measured_data_yj <- cbind(measured_data[, "x", drop = FALSE],
+                                  transformation_yj$Y)
+
+        # robust Yeo-Johnson transformation of mediator and outcome variable
+        transformation_ryj <- transfo(measured_data[, c("m", "y")], type = "YJ",
+                                      robust = TRUE, standardize = FALSE,
+                                      checkPars = list(coreOnly = TRUE))
+        measured_data_ryj <- cbind(measured_data[, "x", drop = FALSE],
+                                   transformation_ryj$Y)
 
       } else {
-        df_ols_causal <- NULL
-        df_median_causal <- NULL
+
+        # Yeo-Johnson transformation of all variables
+        transformation_yj <- transfo(measured_data, type = "YJ",
+                                     robust = FALSE, standardize = FALSE,
+                                     checkPars = list(coreOnly = TRUE))
+        measured_data_yj <- as.data.frame(transformation_yj$Y)
+
+        # robust Yeo-Johnson transformation of all variables
+        transformation_ryj <- transfo(measured_data, type = "YJ",
+                                      robust = TRUE, standardize = FALSE,
+                                      checkPars = list(coreOnly = TRUE))
+        measured_data_ryj <- as.data.frame(transformation_ryj$Y)
+
       }
+
+      # OLS bootstrap after Yeo-Johnson transformation
+      df_yj_boot <- tryCatch({
+        # perform bootstrap test
+        test <- test_mediation(measured_data_yj, x = "x", y = "y", m = "m",
+                               test = "boot", R = R, level = level,
+                               type = "perc", indices = boot_indices,
+                               method = "regression", robust = FALSE,
+                               family = "gaussian")
+        # bootstrap test for the indirect effect ab
+        reject_index <- prod(test$ci) > 0
+        # joint normal-theory t tests for a and b
+        p_values_joint_t <- p_value(test, parm = c("a", "b"), type = "data")
+        reject_joint_t <- all(p_values_joint_t < 1 - level)
+        # joint bootstrap z tests for a and b
+        p_values_joint_z <- p_value(test, parm = c("a", "b"), type = "boot")
+        reject_joint_z <- all(p_values_joint_z < 1 - level)
+        # add to data frame
+        cbind(info, Method = "yj_boot", estimate_boot = test$indirect,
+              estimate_data = test$fit$indirect, reject_index,
+              reject_joint_t, reject_joint_z)
+      }, error = function(condition) NULL)
+
+      # ROBMED after robust Yeo-Johnson transformation
+      df_ryj_boot <- tryCatch({
+        # perform bootstrap test
+        test <- test_mediation(measured_data_ryj, x = "x", y = "y", m = "m",
+                               test = "boot", R = R, level = level,
+                               type = "perc", indices = boot_indices,
+                               method = "regression", robust = TRUE,
+                               control = lmrob_control)
+        # bootstrap test for the indirect effect ab
+        reject_index <- prod(test$ci) > 0
+        # joint normal-theory t tests for a and b
+        p_values_joint_t <- p_value(test, parm = c("a", "b"), type = "data")
+        reject_joint_t <- all(p_values_joint_t < 1 - level)
+        # joint bootstrap z tests for a and b
+        p_values_joint_z <- p_value(test, parm = c("a", "b"), type = "boot")
+        reject_joint_z <- all(p_values_joint_z < 1 - level)
+        # add to data frame
+        cbind(info, Method = "ryj_boot", estimate_boot = test$indirect,
+              estimate_data = test$fit$indirect, reject_index,
+              reject_joint_t, reject_joint_z)
+      }, error = function(condition) NULL)
 
       # combine results
       rbind(df_ols_boot, df_winsorized_boot, df_median_boot, df_ROBMED,
-            df_ols_causal, df_median_causal)
+            df_ols_causal, df_median_causal, df_yj_boot, df_ryj_boot)
 
     },
     # Argument 'mc.set.seed = FALSE' is set such that seed of the random
@@ -372,7 +448,9 @@ results_list <- lapply(seq_len(K), function(k) {
     # Together with splitting the indices of settings into a list ensures
     # that the same random numbers are used in each setting for the current
     # replication. The only place inside the parallelized loop where random
-    # numbers are needed is the subsampling algorithm of the MM-estimator.
+    # numbers are needed is the subsampling algorithm of the MM-estimator,
+    # at least for the regression based estimators.  For the causal mediation
+    # analysis approaches, the implementation will draw new bootstrap samples.
     # Variability in the simulated data across the replications is guaranteed
     # by performing the random draws outside the parallelized loop.
     mc.set.seed = FALSE,
@@ -390,6 +468,7 @@ results_list <- lapply(seq_len(K), function(k) {
 
 ## combine results into data frame
 results <- do.call(rbind, results_list)
+row.names(results) <- NULL
 cat(format(Sys.time()), ": finished.\n")
 
 ## store results
