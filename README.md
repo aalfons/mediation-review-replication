@@ -10,22 +10,24 @@ assumptions and are therefore susceptible to the influence of outliers or
 nonnormal distributions. We review common mediation models and discuss various
 approaches for estimation and inference, including their implementation in
 software packages. Moreover, we present robust alternatives, thereby clarifying
-different notions of robustness. Finally, we consider a setting where the 
+different notions of robustness. We further consider a setting where the
 mediation model holds in a latent space but where measurement issues create
 deviations from normality assumptions in the observed variable space, which
 is a setting not commonly considered in the literature on robust mediation
-analysis, and we obtain preleminary results via a simulation study.
+analysis, and we obtain preliminary results via a simulation study. Finally, we
+highlight the mechanics and relevance of robust methods in an an illustrative
+empirical application.
 
 More information can be found in our article:
 
-A. Alfons and D.R. Schley (2024).
+A. Alfons and D.R. Schley (2025).
 Robust mediation analysis: What we talk about when we talk about robustness. 
 PsyArXiv. doi: [10.31234/osf.io/2hqdy](https://doi.org/10.31234/osf.io/2hqdy).
 
 
 ## Reproduce results
 This repository provides a collection of [R](https://CRAN.R-project.org/) 
-scripts to reproduce the figures and simulations in our article.
+scripts to reproduce the figures and analyses in our article.
 
 The easiest way to reproduce the results is to clone this repository with 
 [RStudio](https://rstudio.com/products/rstudio/download/).  Running the 
